@@ -14,7 +14,7 @@ def init_arg():
     parser.add_argument("--chemo_coeff", default=2, type=int)
     parser.add_argument("--radio_coeff", default=2, type=int)
     parser.add_argument("--results_dir", default='results')
-    parser.add_argument("--model_name", default="crn_test_2")
+    parser.add_argument("--model_name", default="crn_test_3")
     parser.add_argument("--b_encoder_hyperparm_tuning", default=False)
     parser.add_argument("--b_decoder_hyperparm_tuning", default=False)
     return parser.parse_args()

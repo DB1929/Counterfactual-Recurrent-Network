@@ -28,7 +28,7 @@ class CRN_Model:
 
         self.b_train_decoder = b_train_decoder
 
-        tf.reset_default_graph()
+        tf.reset_default_graph() # tf.reset_default_graph函数用于清除默认图形堆栈并重置全局默认图形
 
         self.current_covariates = tf.placeholder(tf.float32, [None, self.max_sequence_length, self.num_covariates])
 
@@ -56,8 +56,9 @@ class CRN_Model:
 
         decoder_init_state = None
         if (self.b_train_decoder):
+            # 如果是decoder，将init_state通过concate做成两份 tf.concat([self.init_state, self.init_state]
             decoder_init_state = tf.concat([self.init_state, self.init_state], axis=-1)
-
+        # 基于LSTM的rnn，并根据指定长度截断
         rnn_output, _ = rnn.dynamic_rnn(
             rnn_cell,
             self.rnn_input,
@@ -65,13 +66,14 @@ class CRN_Model:
             dtype=tf.float32,
             sequence_length=self.sequence_length)
 
-        # Flatten to apply same weights to all time steps.
+        # Flatten to apply same weights to all time steps. rnn_output.shape = [?, 24] (最后时刻的输出)
         rnn_output = tf.reshape(rnn_output, [-1, self.rnn_hidden_units])
         balancing_representation = tf.layers.dense(rnn_output, self.br_size, activation=tf.nn.elu)
 
         return balancing_representation
 
     def build_treatment_assignments_one_hot(self, balancing_representation):
+        # 使用FG
         balancing_representation_gr = flip_gradient(balancing_representation, self.alpha)
 
         treatments_network_layer = tf.layers.dense(balancing_representation_gr, self.fc_hidden_units,
@@ -92,9 +94,9 @@ class CRN_Model:
         return outcome_predictions
 
     def train(self, dataset_train, dataset_val, model_name, model_folder):
-        self.balancing_representation = self.build_balancing_representation()
-        self.treatment_prob_predictions = self.build_treatment_assignments_one_hot(self.balancing_representation)
-        self.predictions = self.build_outcomes(self.balancing_representation)
+        self.balancing_representation = self.build_balancing_representation()  # 这里获得Φ(H_t)
+        self.treatment_prob_predictions = self.build_treatment_assignments_one_hot(self.balancing_representation) # 这里获得G_a
+        self.predictions = self.build_outcomes(self.balancing_representation) # 这里获得G_y， 注意计算G_y的时候用到了current_treatments
 
         self.loss_treatments = self.compute_loss_treatments_one_hot(target_treatments=self.current_treatments,
                                                                     treatment_predictions=self.treatment_prob_predictions,
@@ -126,7 +128,7 @@ class CRN_Model:
                                                        batch_current_treatments, batch_init_state, batch_outputs,
                                                        batch_active_entries,
                                                        alpha_current)
-
+                # feed_dict: A dictionary that maps graph elements to values .
                 _, training_loss, training_loss_outcomes, training_loss_treatments = self.sess.run(
                     [optimizer, self.loss, self.loss_outcomes, self.loss_treatments],
                     feed_dict=feed_dict)
@@ -443,8 +445,13 @@ class CRN_Model:
         return optimizer
 
     def compute_sequence_length(self, sequence):
+        # 计算每个sequence的真正长度
+
+        # tf.reduce_max: Computes the maximum of elements across dimensions of a tensor 求沿着某一维度的最大值
+        # tf.sign： Returns an element-wise indication of the sign of a number.
         used = tf.sign(tf.reduce_max(tf.abs(sequence), axis=2))
         length = tf.reduce_sum(used, axis=1)
+        # Casts a tensor to a new type
         length = tf.cast(length, tf.int32)
 
         return length

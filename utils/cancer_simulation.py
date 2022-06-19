@@ -68,12 +68,13 @@ def get_confounding_params(num_patients, chemo_coeff, radio_coeff):
     :return:
     """
 
-    basic_params = get_standard_params(num_patients)
+    basic_params = get_standard_params(num_patients) # 获取10000条病人数据的静态参数特征
     patient_types = basic_params['patient_types']
     tumour_stage_centres = [s for s in cancer_stage_observations if 'IIIA' not in s]
     tumour_stage_centres.sort()
 
     d_max = calc_diameter(tumour_death_threshold)
+    # 将confounding信息加入到数据中
     basic_params['chemo_sigmoid_intercepts'] = np.array([d_max / 2.0 for i in patient_types])
     basic_params['radio_sigmoid_intercepts'] = np.array([d_max / 2.0 for i in patient_types])
 
@@ -91,29 +92,31 @@ def get_standard_params(num_patients):  # additional params
     :return: simulation_parameters
     """
 
-    # Adjustments for static variables
+    # Adjustments for static variables  随机产生10000个病人类型数据
     possible_patient_types = [1, 2, 3]
     patient_types = np.random.choice(possible_patient_types,
                                      num_patients)
-    chemo_mean_adjustments = np.array([0.0 if i < 3 else 0.1 for i in patient_types])
-    radio_mean_adjustments = np.array([0.0 if i > 1 else 0.1 for i in patient_types])
+    chemo_mean_adjustments = np.array([0.0 if i < 3 else 0.1 for i in patient_types]) # 如果type=3,赋值为0.1，否则为0
+    radio_mean_adjustments = np.array([0.0 if i > 1 else 0.1 for i in patient_types]) # 如果type=1,赋值为0.1，否则为0
 
     total = 0
     for k in cancer_stage_observations:
         total += cancer_stage_observations[k]
     cancer_stage_proportions = {k: float(cancer_stage_observations[k]) / float(total) for k in
-                                cancer_stage_observations}
+                                cancer_stage_observations} # 计算每个癌症阶段的占比（阶段分布）
 
     # remove possible entries
     possible_stages = list(tumour_size_distributions.keys())
     possible_stages.sort()
 
     initial_stages = np.random.choice(possible_stages, num_patients,
-                                      p=[cancer_stage_proportions[k] for k in possible_stages])
+                                      p=[cancer_stage_proportions[k] for k in possible_stages]) # 根据癌症阶段分布，为每个病人随机分配癌症阶段
 
     # Get info on patient stages and initial volumes
     output_initial_diam = []
     patient_sim_stages = []
+
+    # 根据每种肿瘤阶段的参数，获取每种阶段的阶段分布，并获取其密度值（np.exp((norm_rvs * sigma) + mu)）
     for stg in possible_stages:
         count = np.sum((initial_stages == stg) * 1)
 
@@ -130,7 +133,8 @@ def get_standard_params(num_patients):  # additional params
             sigma,
             lower_bound,
             upper_bound))
-
+        # https://blog.csdn.net/weixin_43135178/article/details/120622761
+        # 截断正态分布，将正态分布的取值约束在[lower_bound, upper_bound]之间
         norm_rvs = truncnorm.rvs(lower_bound, upper_bound,
                                  size=count)  # truncated normal for realistic clinical outcome
 
@@ -204,7 +208,7 @@ def get_standard_params(num_patients):  # additional params
 
     output_params = {}
     for k in output_holder:
-        output_params[k] = output_holder[k][idx]
+        output_params[k] = output_holder[k][idx] # 打乱每个特征的顺序
 
     return output_params
 
@@ -255,7 +259,7 @@ def simulate(simulation_params, num_time_steps, assigned_actions=None):
 
     # Commence Simulation
     cancer_volume = np.zeros((num_patients, num_time_steps))
-    chemo_dosage = np.zeros((num_patients, num_time_steps))
+    chemo_dosage = np.zeros((num_patients, num_time_steps)) # dosage：剂量
     radio_dosage = np.zeros((num_patients, num_time_steps))
     chemo_application_point = np.zeros((num_patients, num_time_steps))
     radio_application_point = np.zeros((num_patients, num_time_steps))
@@ -834,8 +838,9 @@ def get_cancer_sim_data(chemo_coeff, radio_coeff, b_load, b_save=False, seed=100
         params = get_confounding_params(num_patients, chemo_coeff=chemo_coeff,
                                             radio_coeff=radio_coeff)
         params['window_size'] = window_size
+        # 训练集
         training_data = simulate(params, num_time_steps)
-
+        # 验证集
         params = get_confounding_params(int(num_patients / 10), chemo_coeff=chemo_coeff,
                                             radio_coeff=radio_coeff)
         params['window_size'] = window_size
@@ -844,7 +849,9 @@ def get_cancer_sim_data(chemo_coeff, radio_coeff, b_load, b_save=False, seed=100
         params = get_confounding_params(int(num_patients / 10), chemo_coeff=chemo_coeff,
                                             radio_coeff=radio_coeff)
         params['window_size'] = window_size
+        # 测试集合
         test_data_factuals = simulate(params, num_time_steps)
+
         test_data_counterfactuals = simulate_counterfactual_test_data(params, num_time_steps)
 
         params = get_confounding_params(int(num_patients / 10), chemo_coeff=chemo_coeff,
@@ -874,7 +881,7 @@ def get_cancer_sim_data(chemo_coeff, radio_coeff, b_load, b_save=False, seed=100
                       'test_data': test_data_counterfactuals,
                       'test_data_factuals': test_data_factuals,
                       'test_data_seq': test_data_seq,
-                      'scaling_data': scaling_data,
+                      'scaling_data': scaling_data,  # 获取特征的均值和方差用于标准化数据
                       'window_size': window_size}
 
         if b_save:

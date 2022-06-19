@@ -59,11 +59,11 @@ def get_processed_data(raw_sim_data,
         ['cancer_volume', 'patient_types', 'chemo_application', 'radio_application']].values.flatten()
     input_stds = std[['cancer_volume', 'patient_types', 'chemo_application', 'radio_application']].values.flatten()
 
-    # Continuous values
+    # Continuous values 标准化数据
     cancer_volume = (raw_sim_data['cancer_volume'] - mean['cancer_volume']) / std['cancer_volume']
     patient_types = (raw_sim_data['patient_types'] - mean['patient_types']) / std['patient_types']
 
-    patient_types = np.stack([patient_types for t in range(cancer_volume.shape[1])], axis=1)
+    patient_types = np.stack([patient_types for t in range(cancer_volume.shape[1])], axis=1) # 将时不变数据进行等值扩充，与时变数据长度一致[1000, ] --> [1000, 60]
 
     # Binary application
     chemo_application = raw_sim_data['chemo_application']
@@ -71,11 +71,12 @@ def get_processed_data(raw_sim_data,
     sequence_lengths = raw_sim_data['sequence_lengths']
 
     # Convert treatments to one-hot encoding
-
+    # 取时变数据的 0-t-1 即 [10000, 60] --> [10000, 59, 1]
     treatments = np.concatenate(
         [chemo_application[:, :-offset, np.newaxis], radio_application[:, :-offset, np.newaxis]], axis=-1)
 
     one_hot_treatments = np.zeros(shape=(treatments.shape[0], treatments.shape[1], 4))
+    # 构造treatments的独热编码，因为有四种treatments方式，这里的转换规则时：[0, 0] --> [1, 0, 0, 0], [1, 0] --> [0, 1, 0, 0], [0, 1] --> [0, 0, 1, 0], [1, 1] --> [0, 0, 0, 1]
     for patient_id in range(treatments.shape[0]):
         for timestep in range(treatments.shape[1]):
             if (treatments[patient_id][timestep][0] == 0 and treatments[patient_id][timestep][1] == 0):
@@ -86,11 +87,12 @@ def get_processed_data(raw_sim_data,
                 one_hot_treatments[patient_id][timestep] = [0, 0, 1, 0]
             elif (treatments[patient_id][timestep][0] == 1 and treatments[patient_id][timestep][1] == 1):
                 one_hot_treatments[patient_id][timestep] = [0, 0, 0, 1]
-
+    # 这里 [0, 59]是label，[0, 58]是输入数据
     one_hot_previous_treatments = one_hot_treatments[:, :-1, :]
 
     current_covariates = np.concatenate(
         [cancer_volume[:, :-offset, np.newaxis], patient_types[:, :-offset, np.newaxis]], axis=-1)
+    # 这里是这样的思想，[0, 59]的数据可以视为输入数据， [1, 60]的数据可以视为label数据  这里 current_covariates 与 treatments 有一步的间隔，即0时刻，没有治疗，这一点可以在图2中体现
     outputs = cancer_volume[:, horizon:, np.newaxis]
 
     output_means = mean[['cancer_volume']].values.flatten()[0]  # because we only need scalars here
@@ -98,7 +100,7 @@ def get_processed_data(raw_sim_data,
 
     print(outputs.shape)
 
-    # Add active entires
+    # Add active entires  这里是建立有效的索引，因为每个人的周期不同，有的人是60，有的人不到60
     active_entries = np.zeros(outputs.shape)
 
     for i in range(sequence_lengths.shape[0]):
@@ -116,7 +118,7 @@ def get_processed_data(raw_sim_data,
     raw_sim_data['inputs_stds'] = input_stds
     raw_sim_data['output_means'] = output_means
     raw_sim_data['output_stds'] = output_stds
-
+    # 这里可以看出数据的特征和label，y_(t+1)即为下一时刻的volume，a_(t+1)即为下一时刻treatment 对于特征，包括 时不变特征V，当前时刻的y，以及当前时刻的treatment
     return raw_sim_data
 
 

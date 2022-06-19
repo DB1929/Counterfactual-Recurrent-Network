@@ -24,7 +24,7 @@ def fit_CRN_encoder(dataset_train, dataset_val, model_name, model_dir, hyperpara
     hyperparams = dict()
     num_simulations = 50
     best_validation_mse = 1000000
-
+    # 这里有两个分支，一个是使用训练好的超参数，一个是自己训练超参数
     if b_hyperparam_opt:
         logging.info("Performing hyperparameter optimization")
         for simulation in range(num_simulations):

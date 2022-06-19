@@ -83,6 +83,12 @@ def fit_CRN_decoder(dataset_train, dataset_val, model_name, model_dir,
 def process_seq_data(data_map, states, projection_horizon):
     """
     Split the sequences in the training data to train the decoder.
+    由于decoder要做的是多步预测，之前已经获得了每一步的隐藏状态，现在就要基于隐藏状态预测多步结果，那么就要把数据包装成多步label的形式，方便计算
+    如果最后几条的数据不够，就视作零向量处理  同时会用seq2seq_sequence_lengths来记录本条数据的horizon数目
+    以前的数据形式是 [num_patients, sequence_length, feature_length]，现在的数据形式是 [num_patients*sequence_length, projection_horizon, feature_length]
+    其中 第一维的 每sequence_length长度的数据为一个病人的数据，记录每个病人每个timestep上的[projection_horizon, feature_length]数据，即时间戳数据
+
+    后续会根据序列的真实长度压缩数据的第一维度，以减少数据量 这里是 590000 --> 556057
     """
 
     outputs = data_map['outputs']
@@ -213,10 +219,10 @@ def test_CRN_decoder(pickle_map, max_projection_horizon, projection_horizon, mod
     validation_processed = get_processed_data(validation_data, scaling_data)
 
     encoder_model = load_trained_model(validation_processed, encoder_hyperparams_file, encoder_model_name, models_dir)
-    training_br_states = encoder_model.get_balancing_reps(training_processed)
+    training_br_states = encoder_model.get_balancing_reps(training_processed) # 计算训练集的Φ(Ht) [batch_size, max_length, hidden_size]
     validation_br_states = encoder_model.get_balancing_reps(validation_processed)
 
-    training_seq_processed = process_seq_data(training_processed, training_br_states, max_projection_horizon)
+    training_seq_processed = process_seq_data(training_processed, training_br_states, max_projection_horizon) # 将单步数据变换形式，处理为多步数据形式
     validation_seq_processed = process_seq_data(validation_processed, validation_br_states, max_projection_horizon)
 
     fit_CRN_decoder(dataset_train=training_seq_processed, dataset_val=validation_seq_processed,

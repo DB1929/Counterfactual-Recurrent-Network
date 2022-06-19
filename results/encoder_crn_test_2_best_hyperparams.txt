@@ -1,0 +1,2 @@
+﻿€}q (X   rnn_hidden_unitsqKX   br_sizeqKX   fc_hidden_unitsqK$X   learning_rateqG?剒酖?{X
+   batch_sizeqK€X   rnn_keep_probqG?焯烫烫蛈.
